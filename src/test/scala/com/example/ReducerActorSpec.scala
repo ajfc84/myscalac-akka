@@ -14,7 +14,7 @@ class ReducerActorSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike {
 
   it should "receive an Organization Repositories Contributions and return an Organization Contributors" in {
     val replyProbe = createTestProbe[Command]()
-    val underTest = spawn(ReducerActor(State(replyTo = replyProbe.ref)))
+    val underTest = spawn(ReducerActor(replyProbe.ref))
     underTest ! OnStart("scalac")
     underTest ! Contributor("Jedi, Master", 7)
     underTest ! Contributor("T1000, Terminator", 70)

@@ -11,7 +11,7 @@ object ReducerActor {
   case class OnStart(organization: String) extends Command
   case class OnTerminate() extends Command
   case class State(org: String = "", result: HashMap[String, Int] = HashMap.empty, replyTo: ActorRef[Command])
-  def apply(state: State): Behavior[Command] = onStart(state)
+  def apply(replyTo: ActorRef[Command]): Behavior[Command] = onStart(State(replyTo = replyTo))
 
   private def onStart(state: State): Behavior[Command] =
     Behaviors.receive( (context, msg) => msg match {
