@@ -3,7 +3,7 @@ package com.example
 import akka.actor.typed.scaladsl._
 import akka.actor.typed.{ActorRef, Behavior}
 import com.example.GitHubClientActor._
-import com.example.GitHubApiGuardian._
+import com.example.ApiGuardian._
 import com.example.ReducerActor.OnTerminate
 
 import scala.concurrent.duration.DurationInt

@@ -8,7 +8,7 @@ import scala.collection.immutable.HashMap
 
 class ReducerActorSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike {
   import ReducerActor._
-  import GitHubApiGuardian._
+  import ApiGuardian._
 
   behavior of "ReducerActor"
 

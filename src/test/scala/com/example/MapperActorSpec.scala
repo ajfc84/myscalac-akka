@@ -2,7 +2,7 @@ package com.example
 
 import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.ActorRef
-import com.example.GitHubApiGuardian.Command
+import com.example.ApiGuardian.Command
 import com.example.GitHubClientActor._
 import com.example.MapperActor._
 import org.scalatest.flatspec.AnyFlatSpecLike

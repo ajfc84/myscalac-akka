@@ -2,7 +2,7 @@ package com.example
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
-import com.example.GitHubApiGuardian.{Command, Contributors}
+import com.example.ApiGuardian.{Command, Contributors}
 import com.example.MapperActor.Contributor
 
 import scala.collection.immutable.HashMap
