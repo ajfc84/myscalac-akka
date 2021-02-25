@@ -24,7 +24,7 @@ object ApiGuardian {
   def apply(ttl: Duration = 5.seconds): Behavior[Command] = Behaviors.setup(
     context => {
       val token = System.getenv("GH_TOKEN")
-      context.log.info("Using GH_Token " + token)
+      context.log.debug("Using GH_Token " + token)
       val gitHubClientPool = Routers.pool(5)(GitHubClientActor(token)).withBroadcastPredicate(
         msg => msg.isInstanceOf[StartContributionsRequest] ||
           msg.isInstanceOf[TerminateContributionsRequest])

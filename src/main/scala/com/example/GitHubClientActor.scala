@@ -40,8 +40,7 @@ object GitHubClientActor {
   implicit val gitHubContributorFormat: RootJsonFormat[GitHubContributor] = jsonFormat2(GitHubContributor)
 
 
-  def apply(token: String): Behavior[Command] =
-    onRequests(Authorization(OAuth2BearerToken(token)))
+  def apply(token: String): Behavior[Command] = onRequests(Authorization(OAuth2BearerToken(token)))
 
   def onRequests(authorization: Authorization): Behavior[Command] = Behaviors.receive(
     (context, msg) => {
