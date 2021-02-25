@@ -38,7 +38,7 @@ object MapperActor {
       timers.startSingleTimer(OnTerminate(), 10.second)
       Behaviors.receive[Command] { (context, msg) =>
         msg match {
-          case Organization(_) | RepositoriesResponse(_, _)=>
+          case Organization(_) | RepositoriesResponse(_, _) =>
             if(conf.buffer.isFull) context.log.warn("Mapper Actor StashBuffer full: " + msg + " dropped!")
             else conf.buffer.stash(msg)
             Behaviors.same
@@ -48,7 +48,8 @@ object MapperActor {
             if (remainingRepos.isEmpty) {
               conf.reducerRef ! OnTerminate()
               timers.cancel(OnTerminate())
-              conf.buffer.unstash(onUnStashed(conf), 1, UnStashed)
+              if(!conf.buffer.isEmpty) conf.buffer.unstash(onUnStashed(conf), 1, UnStashed)
+              else onRepositories(conf)
             }
             else
               onContributions(conf, remainingRepos)
@@ -56,7 +57,8 @@ object MapperActor {
             context.log.info("MapperActor Timeout awaiting for response from GitHubClientActor")
             conf.reducerRef ! OnTerminate()
             timers.cancel(OnTerminate())
-            conf.buffer.unstash(onUnStashed(conf), 1, UnStashed)
+            if(!conf.buffer.isEmpty) conf.buffer.unstash(onUnStashed(conf), 1, UnStashed)
+            else onRepositories(conf)
           case ukn =>
             context.log.info("Contribution not understood: " + ukn)
             Behaviors.same
