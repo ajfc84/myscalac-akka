@@ -1,40 +1,63 @@
 package com.example
 
-import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.Behaviors
-import akka.http.scaladsl.Http
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
-import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Directives
+import spray.json.{DefaultJsonProtocol, PrettyPrinter, RootJsonFormat}
+import ApiGuardian.{Command, Contributors, OrganizationRequest}
+import akka.actor.typed.scaladsl.AskPattern._
+import akka.actor.typed.ActorSystem
+import akka.http.scaladsl.Http
+import akka.util.Timeout
 
+import scala.concurrent.{ExecutionContextExecutor, Future}
+import scala.concurrent.duration.DurationInt
 import scala.io.StdIn
 
-object ScalacRestAPI extends App {
-    implicit val system = ActorSystem(Behaviors.empty, "rest_api_system")
-    implicit val executionContext = system.executionContext
 
-    val route =
-      concat(
-        (get & path("org" / Segment / "contributors")) {
-          org_name => {
+trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+    implicit val printer: PrettyPrinter = PrettyPrinter
+    implicit val contributorsFormat: RootJsonFormat[Contributors] = jsonFormat2(Contributors)
+}
+
+object ScalacRestAPI extends Directives with JsonSupport {
+
+    def main(args: Array[String]): Unit = {
+        implicit val scalacSystem: ActorSystem[Command] = ActorSystem(ApiGuardian(30.seconds), "rest_api_system")
+        implicit val executionContext: ExecutionContextExecutor = scalacSystem.executionContext
+        implicit val timeout: Timeout = 10.seconds
+        val routes = {
             concat(
-              (parameter("page".as[Int])) {
-                page =>
-                  complete(HttpEntity(ContentTypes.`application/json`, "{\"msg\": \"Hello " + org_name + ", on page " + page + "!\"}"))
-              },
-              complete(HttpEntity(ContentTypes.`application/json`, "{\"msg\": \"Hello " + org_name + "!\"}"))
+                (get & path("org" / Segment / "contributors")) {
+                    org_name => {
+                        concat(
+                            parameter("page".as[Int]) {
+                                page => {
+                                    // system ? Organization(org_name)
+                                    complete(HttpEntity(ContentTypes.`application/json`, "{\"msg\": \"Unimplemented!\"}"))
+                                }
+                            }, {
+                                val response: Future[Command] = scalacSystem.ask(OrganizationRequest(org_name, _))
+                                onSuccess(response) {
+                                    case msg: Contributors => complete(msg)
+                                }
+                            }
+                        )
+                    }
+                },
+                (get & path("test")) {
+                    complete(HttpEntity(ContentTypes.`application/json`, "{\"msg\": \"Hello World!\"}"))
+                }
             )
-          }
-        },
-        (get & path("test")) {
-            complete(HttpEntity(ContentTypes.`application/json`, "{\"msg\": \"Hello World!\"}"))
         }
-      )
-    val hostname = "localhost"
-    val port = 8080
-    val bindingFuture = Http().newServerAt(hostname, port).bind(route)
-    system.log.info(s"Starting Rest Api at ${hostname}:${port}")
-    StdIn.readLine()
-    bindingFuture
-      .flatMap(_.unbind())
-      .onComplete(_ => system.terminate())
+        val hostname = "localhost"
+        val port = 8080
+        val bindingFuture = Http().newServerAt(hostname, port).bind(routes)
+        scalacSystem.log.info("Starting Scalac Rest API Server at host: " + hostname + ", port: " + port)
+        StdIn.readLine()
+        bindingFuture
+          .flatMap(_.unbind())
+          .onComplete(_ => scalacSystem.terminate())
+    }
+
 }
