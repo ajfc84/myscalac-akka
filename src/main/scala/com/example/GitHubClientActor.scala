@@ -90,10 +90,10 @@ object GitHubClientActor {
           replyTo ! ContributionsResponse(org, repo, contributions)
           Behaviors.same
         case GitHubError() =>
-          context.log.info("GitHub API Client Error: Repository discarded!")
+          context.log.info("GitHub API Client Error: Message discarded!")
           Behaviors.same
         case MarshallerError() =>
-          context.log.info("Marshaller Error: Repository discarded!")
+          context.log.info("Marshaller Error: Message discarded!")
           Behaviors.same
         case _ =>
           context.log.info("Invalid Command: Message discarded!")
