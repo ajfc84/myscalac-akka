@@ -16,8 +16,8 @@ object ReducerActor {
   private def onStart(state: State): Behavior[Command] =
     Behaviors.receive( (context, msg) => msg match {
       case OnStart(org: String) => onRequest(State(org, HashMap.empty, state.replyTo))
-      case _ =>
-        context.log.info("Unknown Command")
+      case ukn =>
+        context.log.info("Unknown Command: " + ukn)
         Behaviors.same
     })
 
