@@ -12,7 +12,8 @@ import scala.concurrent.duration.{Duration, DurationInt}
 object ApiGuardian {
 
   trait Command
-  final case class Organization(name: String, replyTo: ActorRef[Command]) extends Command
+  final case class OrganizationRequest(name: String, replyTo: ActorRef[Command]) extends Command
+  final case class Organization(name: String) extends Command
   final case class Contributors(organization: String, contributors: Map[String, Int]) extends Command
 
   private val organizationsCache = mutable.HashMap[String, (Map[String, Int], Long)]()
@@ -25,7 +26,8 @@ object ApiGuardian {
       val gitHubClientPool = Routers.pool(5)(GitHubClientActor()).withBroadcastPredicate(
         msg => msg.isInstanceOf[StartContributionsRequest] ||
           msg.isInstanceOf[TerminateContributionsRequest])
-      val clientRouterRef = context.spawn(gitHubClientPool, "github-client-pool")
+//      val clientRouterRef = context.spawn(gitHubClientPool, "github-client-pool")
+      val clientRouterRef = context.spawn(GitHubClientActor(), "github-client-pool")
       val reducerActorRef = context.spawn(ReducerActor(context.self), "reducer_actor")
       val mapperActorRef = context.spawn(MapperActor(clientRouterRef, reducerActorRef), "mapper_actor")
 
@@ -40,15 +42,15 @@ object ApiGuardian {
 }
 
 class ApiGuardian(context: ActorContext[Command], actors: Actors, ttl: Duration) extends AbstractBehavior[Command](context) {
-  context.log.info("Starting Scalac Rest API")
+  context.log.info("Starting Scalac Rest API System")
   import ApiGuardian._
 
   override def onMessage(msg: Command): Behavior[Command] = msg match {
-      case Organization(org, replyTo) =>
+      case OrganizationRequest(org, replyTo) =>
         if(organizationsCache.contains(org) && (System.currentTimeMillis() - organizationsCache(org)._2) < ttl.toMillis)
           replyTo ! Contributors(org, organizationsCache(org)._1)
         else {
-          actors.routerRef ! RepositoriesRequest(org, actors.mapperRef)
+          actors.mapperRef ! Organization(org)
           requestsTable += (org -> replyTo)
         }
         Behaviors.same
@@ -56,6 +58,7 @@ class ApiGuardian(context: ActorContext[Command], actors: Actors, ttl: Duration)
         val ttl = System.currentTimeMillis()
         organizationsCache += (org -> (count, ttl))
         requestsTable(org) ! Contributors(org, organizationsCache(org)._1)
+        requestsTable -= org
         Behaviors.same
   }
   override def onSignal: PartialFunction[Signal, Behavior[Command]] = {
