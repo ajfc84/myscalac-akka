@@ -1,17 +1,18 @@
 package com.example
 
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.http.scaladsl.Http
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCode, StatusCodes}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
+import akka.http.scaladsl.model.headers.{Authorization, OAuth2BearerToken}
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import com.example.ApiGuardian.Command
+import spray.json.DefaultJsonProtocol._
+import spray.json.RootJsonFormat
 
 import scala.concurrent.{ExecutionContextExecutor, Future}
 import scala.util.{Failure, Success}
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
-import spray.json.DefaultJsonProtocol._
-import spray.json.RootJsonFormat
 
 
 object GitHubClientActor {
@@ -38,15 +39,18 @@ object GitHubClientActor {
   implicit val gitHubRepositoryFormat: RootJsonFormat[GitHubRepository] = jsonFormat1(GitHubRepository)
   implicit val gitHubContributorFormat: RootJsonFormat[GitHubContributor] = jsonFormat2(GitHubContributor)
 
-  def apply(): Behavior[Command] = onRequests()
 
-  def onRequests(): Behavior[Command] = Behaviors.receive(
+  def apply(token: String): Behavior[Command] =
+    onRequests(Authorization(OAuth2BearerToken(token)))
+
+  def onRequests(authorization: Authorization): Behavior[Command] = Behaviors.receive(
     (context, msg) => {
       implicit val executionContext: ExecutionContextExecutor = context.executionContext
       implicit val system: ActorSystem[Nothing] = context.system
       msg match {
         case RepositoriesRequest(org, replyTo) =>
-          context.pipeToSelf(Http().singleRequest(HttpRequest(uri = "https://api.github.com/orgs/" + org + "/repos"))) {
+          context.pipeToSelf(Http().singleRequest(HttpRequest(uri = "https://api.github.com/orgs/" + org + "/repos")
+            .withHeaders(Seq(authorization)))) {
             case Success(response@HttpResponse(StatusCodes.OK, _, _, _)) => Http2RepositoryJsonResult(Unmarshal(response).to[Set[GitHubRepository]], org, replyTo)
             case Success(response) =>
             response.discardEntityBytes()
@@ -66,7 +70,8 @@ object GitHubClientActor {
           replyTo ! RepositoriesResponse(org, repos)
           Behaviors.same
         case ContributionsRequest(org, repo, replyTo) =>
-          context.pipeToSelf(Http().singleRequest(HttpRequest(uri = "https://api.github.com/repos/" + org + "/" + repo + "/contributors"))) {
+          context.pipeToSelf(Http().singleRequest(HttpRequest(uri = "https://api.github.com/repos/" + org + "/" + repo + "/contributors")
+            .withHeaders(Seq(authorization)))) {
             case Success(response@HttpResponse(StatusCodes.OK, _, _, _)) => Http2ContributorJsonResult(Unmarshal(response).to[Set[GitHubContributor]], org, repo, replyTo)
             case Success(response) =>
             response.discardEntityBytes()

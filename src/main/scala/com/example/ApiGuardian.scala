@@ -23,11 +23,13 @@ object ApiGuardian {
 
   def apply(ttl: Duration = 5.seconds): Behavior[Command] = Behaviors.setup(
     context => {
-      val gitHubClientPool = Routers.pool(5)(GitHubClientActor()).withBroadcastPredicate(
+      val token = System.getenv("GH_TOKEN")
+      context.log.info("Using GH_Token " + token)
+      val gitHubClientPool = Routers.pool(5)(GitHubClientActor(token)).withBroadcastPredicate(
         msg => msg.isInstanceOf[StartContributionsRequest] ||
           msg.isInstanceOf[TerminateContributionsRequest])
 //      val clientRouterRef = context.spawn(gitHubClientPool, "github-client-pool")
-      val clientRouterRef = context.spawn(GitHubClientActor(), "github-client-pool")
+      val clientRouterRef = context.spawn(GitHubClientActor(token), "github-client-pool")
       val reducerActorRef = context.spawn(ReducerActor(context.self), "reducer_actor")
       val mapperActorRef = context.spawn(MapperActor(clientRouterRef, reducerActorRef), "mapper_actor")
 
