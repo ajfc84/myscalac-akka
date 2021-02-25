@@ -1,10 +1,11 @@
 package com.example
 
-import akka.actor.testkit.typed.scaladsl.{ScalaTestWithActorTestKit, TestProbe}
+import akka.actor.testkit.typed.scaladsl.{LoggingTestKit, ScalaTestWithActorTestKit, TestProbe}
 import akka.actor.typed.ActorRef
-import com.example.ApiGuardian.Command
+import com.example.ApiGuardian.{Command, Organization}
 import com.example.GitHubClientActor._
 import com.example.MapperActor._
+import com.example.ReducerActor.{OnStart, OnTerminate}
 import org.scalatest.flatspec.AnyFlatSpecLike
 
 import scala.collection.immutable.HashMap
@@ -19,23 +20,39 @@ class MapperActorSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike {
   val testOrganization = "scalac"
   val testRepositories = Set("test", "prod")
   val testContributions: Map[String, Int] = HashMap("Jedi, Master" -> 7, "T1000, Terminator" -> 70, "Kirk, Captain" -> 1)
-  val testData: RepositoriesResponse = RepositoriesResponse(testOrganization, testRepositories)
-  val testOrganization2 = "scalac"
-  val testRepositories2 = Set("test", "prod")
+  val testOrganization2 = "spaceX"
+  val testRepositories2 = Set("dev", "beta")
   val testContributions2: Map[String, Int] = HashMap("Skywalker, Anakin" -> 101, "T1, Terminator" -> 7000, "Spock, Mr" -> 25)
-  val testData2: RepositoriesResponse = RepositoriesResponse(testOrganization2, testRepositories2)
+  val testOrganization3 = "Virgin Galactic"
 
-  it should "receive the Organization's Repositories and send the Contributions requests" in {
-    mapperActor ! testData
-    routerProbe.expectMessage(StartContributionsRequest())
-    for(d <- testData.repositories) {
-      routerProbe.expectMessage(ContributionsRequest(testOrganization, d, mapperActor.ref))
-    }
-    routerProbe.expectMessage(TerminateContributionsRequest())
+  it should "Send a Repository Request for each received Organization message" in {
+    mapperActor ! Organization(testOrganization)
+    mapperActor ! Organization(testOrganization2)
+    routerProbe.expectMessage(RepositoriesRequest(testOrganization, mapperActor.ref))
+    routerProbe.expectMessage(RepositoriesRequest(testOrganization2, mapperActor.ref))
   }
 
-  it should "receive the second Organization's Repositories and ignore while in the Contributions state" in {
-    mapperActor ! testData2
+  it should "discard any ContributionResponse while in the Repositories state" in {
+    mapperActor ! ContributionsResponse("garbage", "garbage", Map("garbage" -> 0))
+    routerProbe.expectNoMessage()
+    reducerProbe.expectNoMessage()
+  }
+
+  it should "receive the first Organization's RepositoriesResponse, send the Contributions requests and jump to onContributions state" in {
+    mapperActor ! RepositoriesResponse(testOrganization, testRepositories)
+    for(d <- testRepositories) {
+      routerProbe.expectMessage(ContributionsRequest(testOrganization, d, mapperActor.ref))
+    }
+    reducerProbe.expectMessage(OnStart(testOrganization))
+  }
+
+  it should "receive the second RepositoriesResponse and stash it while in the Contributions state" in {
+    mapperActor ! RepositoriesResponse(testOrganization2, testRepositories2)
+    routerProbe.expectNoMessage()
+  }
+
+  it should "receive the third Organization msg and stash it while in the Contributions state" in {
+    mapperActor ! Organization(testOrganization3)
     routerProbe.expectNoMessage()
   }
 
@@ -43,14 +60,25 @@ class MapperActorSpec extends ScalaTestWithActorTestKit with AnyFlatSpecLike {
     for(repo <- testRepositories) mapperActor ! ContributionsResponse(testOrganization, repo, testContributions)
     for((n, c) <- testContributions) reducerProbe.expectMessage(Contributor(n, c))
     for((n, c) <- testContributions) reducerProbe.expectMessage(Contributor(n, c))
+    reducerProbe.expectMessage(OnTerminate())
   }
 
-  it should "process the Repositories from the second organization that were waiting in the stash buffer" in {
-    routerProbe.expectMessage(StartContributionsRequest())
-    for(d <- testData2.repositories) {
+  it should "process the RepositoryResponse Message from the second organization that was waiting in the stash buffer and send the ContributionsRequest" in {
+    for(d <- testRepositories2) {
       routerProbe.expectMessage(ContributionsRequest(testOrganization2, d, mapperActor.ref))
     }
-    routerProbe.expectMessage(TerminateContributionsRequest())
+    reducerProbe.expectMessage(OnStart(testOrganization2))
+  }
+
+  it should "receive the GitHubClient Contributions from the second Organization and send each Contributor to the reducer" in {
+    for(repo <- testRepositories2) mapperActor ! ContributionsResponse(testOrganization2, repo, testContributions2)
+    for((n, c) <- testContributions2) reducerProbe.expectMessage(Contributor(n, c))
+    for((n, c) <- testContributions2) reducerProbe.expectMessage(Contributor(n, c))
+    reducerProbe.expectMessage(OnTerminate())
+  }
+
+  it should "process the third Organization's message that was waiting in the stash buffer and send the RepositoriesRequest" in {
+    routerProbe.expectMessage(RepositoriesRequest(testOrganization3, mapperActor.ref))
   }
 
 }
