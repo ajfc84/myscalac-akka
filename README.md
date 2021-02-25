@@ -14,7 +14,7 @@
 6. press \<\<Enter\>\> (stop the server)
 
 ### Project Description
- This project is a small API of one only endpoint: "http://localhost:8080/org/<organization>/contributors"  that 
+ This project is a small API of one only endpoint: "http://localhost:8080/org/organization/contributors"  that 
  essentially connects to the GitHub API (api.github.com) and retrieves the number of contributions per
  contributor for a specified organization. The "organization" of the request is specified in the second segment of the
  path, <<i>organization</b>>.
