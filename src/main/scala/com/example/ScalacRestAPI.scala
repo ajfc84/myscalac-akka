@@ -1,7 +1,7 @@
 package com.example
 
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.model.{ContentTypes, HttpEntity}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 import akka.http.scaladsl.server.Directives
 import spray.json.{DefaultJsonProtocol, PrettyPrinter, RootJsonFormat}
 import ApiGuardian.{Command, Contributors, OrganizationRequest}
@@ -16,8 +16,9 @@ import scala.io.StdIn
 
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
+    final case class Contributor(name: String, contributions: Int)
     implicit val printer: PrettyPrinter = PrettyPrinter
-    implicit val contributorsFormat: RootJsonFormat[Contributors] = jsonFormat2(Contributors)
+    implicit val contributorFormat: RootJsonFormat[Contributor] = jsonFormat2(Contributor)
 }
 
 object ScalacRestAPI extends Directives with JsonSupport {
@@ -25,7 +26,7 @@ object ScalacRestAPI extends Directives with JsonSupport {
     def main(args: Array[String]): Unit = {
         implicit val scalacSystem: ActorSystem[Command] = ActorSystem(ApiGuardian(30.seconds), "rest_api_system")
         implicit val executionContext: ExecutionContextExecutor = scalacSystem.executionContext
-        implicit val timeout: Timeout = 10.seconds
+        implicit val timeout: Timeout = 30.seconds
         val routes = {
             concat(
                 (get & path("org" / Segment / "contributors")) {
@@ -39,7 +40,9 @@ object ScalacRestAPI extends Directives with JsonSupport {
                             }, {
                                 val response: Future[Command] = scalacSystem.ask(OrganizationRequest(org_name, _))
                                 onSuccess(response) {
-                                    case msg: Contributors => complete(msg)
+                                    case msg: Contributors =>
+                                        complete(for(c <- msg.contributors) yield Contributor(c._1, c._2))
+                                    case _ => complete(StatusCodes.NotFound)
                                 }
                             }
                         )
